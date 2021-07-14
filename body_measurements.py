@@ -14,9 +14,9 @@ matplotlib.use('TkAgg')
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    outdir = "/home/pauline/exercise_study/"
+    outdir = "/home/pauline/exercise_study_data/"
 
-    xl = pd.ExcelFile("/home/pauline/exercise_study/ExerciseStudy.xls")
+    xl = pd.ExcelFile("/home/pauline/exercise_study_data/ExerciseStudy.xls")
     sheet_names = xl.sheet_names
     df_body = xl.parse ("Body measurements")
 

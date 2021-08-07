@@ -4,8 +4,11 @@ from datetime import datetime
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
+
 import os
 
 def add_age_gender (df, xls_file):
@@ -101,11 +104,14 @@ def read_metabolite_data (xls_file):
     combined_df = pd.concat (avg_dfs_list)
     return combined_df
 
-def run_PCA (df, pca, feat_cols, pca_components, fit_transform = True):
+def run_PCA (df, scaler, pca, feat_cols, pca_components, fit_transform = True):
     print ('running PCA')
 
-    autoscaler = StandardScaler()
-    autoscaled_df = autoscaler.fit_transform (df[feat_cols])
+    #autoscaler = StandardScaler()
+    #autoscaled_df = autoscaler.fit_transform (df[feat_cols])
+    autoscaled_df = scaler.transform (df)
+    #print ("autoscale")
+    #print (autoscaled_df)
     num_components = pca_components
 
    # print (df[feat_cols].values)
@@ -165,12 +171,15 @@ def plot_PCA (df, outfig_base):
     plt.clf()
 
 def plot_trajectories (df_list, outfig):
+    fig = plt.figure(figsize=(16,20))
+#    ax_2D = fig.add_subplot (1,2,1)
+    ax_3D = fig.add_subplot(3,1, (1,2), projection='3d')
+    ax_2D = fig.add_subplot(3, 1, 3)
+    fig_2D = plt.figure()
+    fig_3D = plt.figure(figsize=(16,10)).gca (projection='3d')
 
-    # format should be
-    x_array = [1,2,3]
-    y_array = [2,4,8]
-    z_array = [3,6,10]
-    #3D
+   # ax_2D = fig_2D.add_subplot(111)
+   # ax_3D = fig_3D #.add_subplot(111)
 
     first_df = df_list[0]
    # print (first_df.columns)
@@ -178,11 +187,7 @@ def plot_trajectories (df_list, outfig):
     for df_index in range (1, len(df_list)):
         df = df_list[df_index]
         pc_df = pc_df.merge (df[['SUBJECT', 'PCA1', 'PCA2', 'PCA3']], on="SUBJECT", how='left')
-    #    print (pc_df.head())
- #       x_array.append (df['PC1'])
- #       y_array.append (df['PC2'])
- #       z_array.append (df['PC3'])
-    ax = plt.figure (figsize=(16,10)).gca (projection='3d')
+ #   ax = plt.figure (figsize=(16,10)).gca (projection='3d')
 
     pca1_columns = pc_df.columns[pc_df.columns.str.contains ("PCA1")]
     pca2_columns = [col for col in pc_df.columns if col.startswith ("PCA2")]
@@ -191,17 +196,42 @@ def plot_trajectories (df_list, outfig):
     PC1_array = pc_df[pca1_columns].to_numpy()
     PC2_array = pc_df[pca2_columns].to_numpy()
     PC3_array = pc_df[pca3_columns].to_numpy()
-    print (pca1_columns)
-  #  for sample in df:
+    #print (pca1_columns)
+    colors = sns.color_palette('muted', n_colors=len(PC1_array))
+
     for sample_index in range (0, len(PC1_array)):
-        ax.plot (PC1_array[sample_index],PC2_array[sample_index],PC3_array[sample_index]) # need to assign color c=colors
-    ax.set_xlabel ('PC1')
-    ax.set_ylabel ('PC2')
-    ax.set_zlabel ('PC3')
+
+        sample_color = colors[sample_index]
+        rgb = [ int (element * 255) for element in list (sample_color)]
+        #print (rgb)
+        hex_color =  '#%02x%02x%02x' % tuple (rgb)
+        #print (hex_color )
+        #print ("PC1")
+        #print (PC1_array[sample_index])
+        #print ("PC2")
+        #print (PC2_array[sample_index])
+        #print ("PC3")
+        #print (PC3_array[sample_index])
+        ax_2D.plot (PC1_array[sample_index],PC2_array[sample_index], color = hex_color)
+        ax_3D.plot (PC1_array[sample_index],PC2_array[sample_index],PC3_array[sample_index], \
+                 color=hex_color) #c= sample_color ) # need to assign color c=colors
+        #first point
+        ax_3D.scatter(PC1_array[sample_index][0], PC2_array[sample_index][0], PC3_array[sample_index][0], marker="o", c=hex_color) #sample_color)
+
+        #
+       #last point
+        ax_3D.scatter (PC1_array[sample_index][-1],PC2_array[sample_index][-1],PC3_array[sample_index][-1],marker=">", c=hex_color) #sample_color )
+        ax_2D.scatter (PC1_array[sample_index][-1],PC2_array[sample_index][-1], marker=">", c=hex_color)
+    ax_3D.set_xlabel ('PC1')
+    ax_3D.set_ylabel ('PC2')
+    ax_3D.set_zlabel ('PC3')
+    ax_2D.set_xlabel ('PC1')
+    ax_2D.set_ylabel ('PC2')
     #, data=df)
     #hue="SUBJECT", \
     #palette=sns.color_palette('hls', len(df.index)), data=df, legend="full", alpha=0.3)
-    plt.savefig (outfig)
+    fig.savefig (outfig)
+    print ("figure saved in " + outfig)
     plt.clf()
 
 def run_TSNE (df, pca_result):
@@ -212,11 +242,15 @@ def run_TSNE (df, pca_result):
 def print_PC_correlates (df, pca_num_components, pca_results_file):
     corr = df.corr()
     corr_abs = corr.abs()
-    s = corr_abs.unstack ()
-    so = s.sort_values (kind="quicksort", ascending=False)
- #   print (type (so))
-    so = so.to_frame().reset_index()
-    so.columns = ['x','y','abs(corr)']
+ #   s = corr_abs.unstack ()
+    s = corr.unstack()
+    so = s.to_frame().reset_index()
+    print ("PC correlates")
+   # so = s.sort_values (kind="quicksort", ascending=False)
+    print (type (so))
+    #so = so.to_frame().reset_index()
+    so.columns = ['x','y','corr']
+    so['abs(corr)'] = so.apply (lambda row: abs (row['corr']),axis=1)
     print(so.head())
    # exit()
 #    print (so[0])
@@ -225,16 +259,27 @@ def print_PC_correlates (df, pca_num_components, pca_results_file):
     so = so[so['x'].str.contains ("PC")]
     so= so.sort_values (by=['x', 'abs(corr)'], ascending=[True, False])
     print (so.head())
-    so.to_csv (pca_results_file, sep="\t", index=False)
+    so.to_csv (pca_results_file, sep="\t", index=False, float_format="%.3f")
 
 
-def apply_pca (df_day, pca, pca_num_components, feat_cols, xls_file):
+def apply_pca (df_day, scaler, pca, pca_num_components, feat_cols, xls_file):
     df_day_pivot = df_day.pivot('SUBJECT', 'TEST', 'RES')
+    df_day_pivot = df_day_pivot[feat_cols]
     # df_day0_pivot['RES'].reset_index()
     df_day_pivot.reset_index()
     df_day_pivot.columns.name = None
-    df_day_pivot = df_day_pivot.dropna()  # drop rows with NaN
-    pca_result = run_PCA (df_day_pivot, pca, feat_cols, pca_num_components, False)
+    #print ("apply pca")
+    #print (df_day_pivot.shape)
+    #nan_rows = df_day_pivot[df_day_pivot.isna().any(axis=1)] # print rows with NaN
+    #nan_rows.to_csv ("nan_rows.tsv", sep="\t", index=False)
+    #df_day_pivot = df_day_pivot.dropna()  # drop rows with NaN
+    #df_day_pivot = df_day_pivot[df_day_pivot[feat_cols].notna()]
+    df_day_pivot.dropna (subset=feat_cols, inplace=True)
+    #print ("drop na")
+    #print (df_day_pivot.shape)
+    pca_result = run_PCA (df_day_pivot, scaler, pca, feat_cols, pca_num_components, False)
+    print ("after PCA")
+    #print (df_day_pivot.shape)
     df_day_pivot = add_age_gender(df_day_pivot,xls_file)
     return df_day_pivot
 
@@ -245,8 +290,9 @@ if __name__ == '__main__':
     df_day0 = df[df['Day'] == 0]
     df_day96 = df[df['Day'] == 96]
     df_day54 = df[df['Day'] == 54]
-    print (df['Day'].value_counts())
-#    exit()
+    #print (df['Day'].value_counts())
+    print (df_day54['TEST'].value_counts())
+    #exit()
  #   print (df_day0.head())
     df_day0_pivot = df_day0.pivot ('SUBJECT', 'TEST', 'RES')
    # df_day0_pivot['RES'].reset_index()
@@ -259,16 +305,22 @@ if __name__ == '__main__':
     feat_cols = df_day0_pivot.columns.to_list()
 
     # TODO, comment below out once get new dataset. GHB and GHB2 missing for day 54
-    feat_cols = [col  for col in feat_cols if col != 'GHB' and col != 'GHB2']
+    feat_cols = [col  for col in feat_cols if col != 'GHB' and col != 'GHB2' and col != 'NRBC' and col != 'MPV' ]
   #  print ("hi there")
-  #  print (feat_cols)
+    print (feat_cols)
+    #exit()
 #    feat_cols = [x for x in feat_cols if (x != "Age_group" & x != 'Age' & x != "Gender" & x != 'SUBJECT')]
  #   feat_cols = [x for x in feat_cols if x != "Age_group"]
   #  print ("hi 2")
    # print (feat_cols)
     pca_num_components = 8
     pca = PCA(n_components=pca_num_components)
-    pca_result = run_PCA (df_day0_pivot, pca, feat_cols, pca_num_components, True)
+   # autoscaler = StandardScaler()
+    df_day0_pivot = df_day0_pivot[feat_cols] # clean it up
+    # scale to first day, use this same scaling for other days (#scaler)
+    scaler = StandardScaler().fit (df_day0_pivot)
+
+    pca_result = run_PCA (df_day0_pivot, scaler, pca, feat_cols, pca_num_components, True)
     outfig = os.path.join (outdir, "PCA")
     df_day0_pivot = add_age_gender(df_day0_pivot,xls_file)
 
@@ -279,14 +331,21 @@ if __name__ == '__main__':
 #    plot_TSNE(df_day0_pivot, tsne_results, os.path.join (outdir, "TSNE.png"))
 
     # day 54 missing a lot of individuals? only 6 subjects, instead of 40
-    df_day54_pivot= apply_pca (df_day54, pca, pca_num_components, feat_cols, xls_file) #GHB and GHB2 measurements missing
-    df_day96_pivot = apply_pca (df_day96, pca, pca_num_components, feat_cols, xls_file)
-    print(df_day0_pivot['SUBJECT'].nunique())
-    print(df_day54_pivot['SUBJECT'].nunique())
+   # df_day54 = df_day54[feat_cols]
+    df_day54_pivot= apply_pca (df_day54, scaler, pca, pca_num_components, feat_cols, xls_file) #GHB and GHB2 measurements missing
+    #print (df_day54_pivot.head())
+    #exit (0)
+    #df_day96 = df_day96[feat_cols]
+    df_day96_pivot = apply_pca (df_day96, scaler, pca, pca_num_components, feat_cols, xls_file)
+    #print(df_day0_pivot['SUBJECT'].nunique())
+    #print(df_day54_pivot['SUBJECT'].nunique())
 
   #  print (df_day96_pivot.head())
    # print (df_day96_pivot.columns)
-    print (df_day0_pivot.shape)
-    print(df_day54_pivot.shape)
-    print(df_day96_pivot.shape)
-    plot_trajectories ([df_day0_pivot,  df_day96_pivot], os.path.join (outdir, "PCA_trajectories.png"))
+    #print (df_day0_pivot.shape)
+    #print (df_day0_pivot['SUBJECT'].unique)
+    #print(df_day54_pivot.shape)
+    #print (df_day54_pivot['SUBJECT'].unique)
+    #print(df_day96_pivot.shape)
+    #exit (0)
+    plot_trajectories ([df_day0_pivot,  df_day54_pivot, df_day96_pivot], os.path.join (outdir, "PCA_trajectories.png"))

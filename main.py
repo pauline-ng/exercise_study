@@ -6,7 +6,7 @@ import numpy as np
 import seaborn as sns
 from datetime import datetime
 from scipy.stats import linregress
-matplotlib.use('TkAgg')
+from scipy.stats import spearmanr
 
 def plot_hist (df, outdir_fig):
     x_array = []
@@ -110,6 +110,10 @@ if __name__ == '__main__':
     # drop rows where there's no data
     df_clinical_lipids = df_clinical_lipids[df_clinical_lipids['RES'].notna()]
 
+    # drop GHB and GHB2, because there are only 2 timepoints
+    #df_clinical_lipids = df_clinical_lipids[~df_clinical_lipids['TEST'].str.contains('GHB', 'GHB2')]
+    #df_clinical_lipids.reset_index(drop=True)
+
     # turn Date into integer to allow for linear regression
     df_clinical_lipids["Day"] = df_clinical_lipids.apply(lambda row: datetime.strptime (row["DATE"],'%d/%m/%Y').timetuple().tm_yday, axis=1)
     df_clinical_lipids["Day"] = df_clinical_lipids["Day"].astype (int)
@@ -155,7 +159,11 @@ if __name__ == '__main__':
        # print (lin_reg.head())
  #       lin_reg = lin_reg.reset_index()
         lin_reg = lin_reg.merge(df_age_gender, on="SUBJECT", how='left')
-
+        lin_reg_male = lin_reg[lin_reg['Gender'] == 'M']
+        spearman_male_coef, spearman_male_p = spearmanr (lin_reg_male['Age'], lin_reg_male['slope'])
+        lin_reg_female = lin_reg[lin_reg['Gender'] == 'F']
+        spearman_female_coef, spearman_female_p = spearmanr(lin_reg_female['Age'], lin_reg_female['slope'])
+      #  print (str(spearman_female_coef))
 
         lin_reg = discard_outliers (lin_reg,'slope', os.path.join (outdir, test + "_dist.png" ) )
         lin_reg_outfile = os.path.join (outdir, test + "linreg.tsv")
@@ -164,6 +172,14 @@ if __name__ == '__main__':
 
         with open (lin_reg_outfile, "a") as outfp:
             outfp.write (str(lin_reg.mean()))
+
+            # 3 results, expect 3 by chance (30*2*0.05 = 3)
+            if spearman_male_p < 0.05:
+                outfp.write ("\t".join ([test, "Spearman male", str(spearman_male_coef), str(spearman_male_p)]) + '\n')
+            if spearman_female_p < 0.05:
+                outfp.write("\t".join ([test, "Spearman female", str(spearman_female_coef), str(spearman_female_p)]) + '\n')
+
+
         gender_means = lin_reg.groupby (['Gender']).mean()
         age_means =lin_reg.groupby (['age_group']).mean()
         gender_age = lin_reg.groupby (['Gender', 'age_group']).mean()

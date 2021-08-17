@@ -69,7 +69,8 @@ if __name__ == '__main__':
         x.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,g}'))
 
         x.tick_params(axis='x', rotation=0)
-    plt.show()
+#    plt.show()
+    plt.savefig (os.path.join (outdir , "body_changes.png"))
     exit(0)
     body_tests = df_body.groupby (["Measurement parameter"])['Change']
     dfs = [x for _, x in body_tests]

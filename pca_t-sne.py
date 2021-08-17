@@ -26,7 +26,7 @@ def add_age_gender (df, xls_file):
     df_age_gender = df_body[['SUBJECT', 'Age', 'Gender']].drop_duplicates()
     df_age_gender['Age_group'] = df_age_gender.apply(lambda row: 'Under50' if row['Age'] < 50 else 'Over50', axis=1)
     df_age_gender['Age_Gender'] = df_age_gender.apply (lambda row: ' '.join ([row['Gender'], row['Age_group']]),axis=1)
-
+    df_age_gender['Gender_numerical'] =  df_age_gender.apply (lambda row: 1 if row['Gender'] == 'M'else 0, axis=1)
     print(df_age_gender.head())
     df = df.merge(df_age_gender, on="SUBJECT", how='left')
    # print (df.columns)
@@ -109,7 +109,7 @@ def run_PCA (df, scaler, pca, feat_cols, pca_components, fit_transform = True):
 
     #autoscaler = StandardScaler()
     #autoscaled_df = autoscaler.fit_transform (df[feat_cols])
-    autoscaled_df = scaler.transform (df)
+    autoscaled_df = scaler.transform (df[feat_cols])
     #print ("autoscale")
     #print (autoscaled_df)
     num_components = pca_components
@@ -118,6 +118,14 @@ def run_PCA (df, scaler, pca, feat_cols, pca_components, fit_transform = True):
    # pca_result = pca.fit_transform (df[feat_cols].values)
     if fit_transform:
         pca_result = pca.fit_transform(autoscaled_df)
+        # scree plot
+        var_df = pd.DataFrame({'var': pca.explained_variance_ratio_,
+                           'PC': ["PC{}".format (x) for x in range (1,pca_num_components+1)] })
+        ax = sns.barplot(x='PC', y="var",
+                    data=var_df, color="c")
+        fig = ax.get_figure()
+        fig.savefig ('PCA_scree.png')
+        fig.clf()
     else:
         pca_result = pca.transform (autoscaled_df)
     print('Explained variation per principal component: {}'.format(pca.explained_variance_ratio_))
@@ -261,27 +269,47 @@ def print_PC_correlates (df, pca_num_components, pca_results_file):
     print (so.head())
     so.to_csv (pca_results_file, sep="\t", index=False, float_format="%.3f")
 
+def pivot_on_test_res (df):
+    df_pivot = df.pivot('SUBJECT', 'TEST', 'RES')
+    df_pivot.reset_index()
+    df_pivot.columns.name = None
+    return df_pivot
 
 def apply_pca (df_day, scaler, pca, pca_num_components, feat_cols, xls_file):
-    df_day_pivot = df_day.pivot('SUBJECT', 'TEST', 'RES')
-    df_day_pivot = df_day_pivot[feat_cols]
-    # df_day0_pivot['RES'].reset_index()
-    df_day_pivot.reset_index()
-    df_day_pivot.columns.name = None
-    #print ("apply pca")
-    #print (df_day_pivot.shape)
-    #nan_rows = df_day_pivot[df_day_pivot.isna().any(axis=1)] # print rows with NaN
-    #nan_rows.to_csv ("nan_rows.tsv", sep="\t", index=False)
-    #df_day_pivot = df_day_pivot.dropna()  # drop rows with NaN
-    #df_day_pivot = df_day_pivot[df_day_pivot[feat_cols].notna()]
+    df_day_pivot = pivot_on_test_res (df_day)
+    df_day_pivot = add_age_gender(df_day_pivot, xls_file)
+    #this is bad coding, age & gender are port of feat_cols. should probably be added  before apply_pca
+
     df_day_pivot.dropna (subset=feat_cols, inplace=True)
     #print ("drop na")
     #print (df_day_pivot.shape)
     pca_result = run_PCA (df_day_pivot, scaler, pca, feat_cols, pca_num_components, False)
     print ("after PCA")
     #print (df_day_pivot.shape)
-    df_day_pivot = add_age_gender(df_day_pivot,xls_file)
+    #df_day_pivot = add_age_gender(df_day_pivot,xls_file)
     return df_day_pivot
+
+def plot_loadings (score, coeff, labels, outfig):
+    xs = score[:, 0]
+    ys = score[:, 1]
+    n = coeff.shape[0]
+
+    #plt.scatter(xs, ys, c=y)  # without scaling
+    for i in range(n):
+        plt.arrow(0, 0, coeff[i, 0], coeff[i, 1], color='r', alpha=0.5)
+        if labels is None:
+            plt.text(coeff[i, 0] * 1.15, coeff[i, 1] * 1.15, "Var" + str(i + 1), color='g', ha='center', va='center')
+        else:
+            plt.text(coeff[i, 0] * 1.15, coeff[i, 1] * 1.15, labels[i], color='g', ha='center', va='center')
+
+    plt.xlabel("PC{}".format(1))
+    plt.ylabel("PC{}".format(2))
+   # plt.grid()
+    plt.savefig (outfig)
+    plt.clf()
+
+def pca_on_time_points (list_of_dfs)
+    df_day_0 = list_of_dfs[0]
 
 if __name__ == '__main__':
     xls_file = "/home/pauline/exercise_study_data/ExerciseStudy.xls"
@@ -291,13 +319,14 @@ if __name__ == '__main__':
     df_day96 = df[df['Day'] == 96]
     df_day54 = df[df['Day'] == 54]
     #print (df['Day'].value_counts())
-    print (df_day54['TEST'].value_counts())
-    #exit()
+ #   print (df_day54['TEST'].value_counts())
+    #exit()_
  #   print (df_day0.head())
-    df_day0_pivot = df_day0.pivot ('SUBJECT', 'TEST', 'RES')
+  #  df_day0_pivot = df_day0.pivot ('SUBJECT', 'TEST', 'RES')
    # df_day0_pivot['RES'].reset_index()
-    df_day0_pivot.reset_index()
-    df_day0_pivot.columns.name=None
+  #  df_day0_pivot.reset_index()
+   # df_day0_pivot.columns.name=None
+    df_day0_pivot = pivot_on_test_res(df_day0)
     df_day0_pivot = df_day0_pivot.dropna()  # drop rows with NaN
 
   #  df_day0_pivot.columns = df_day0_pivot.columns.droplevel().rename(None)
@@ -308,21 +337,31 @@ if __name__ == '__main__':
     feat_cols = [col  for col in feat_cols if col != 'GHB' and col != 'GHB2' and col != 'NRBC' and col != 'MPV' ]
   #  print ("hi there")
     print (feat_cols)
-    #exit()
-#    feat_cols = [x for x in feat_cols if (x != "Age_group" & x != 'Age' & x != "Gender" & x != 'SUBJECT')]
- #   feat_cols = [x for x in feat_cols if x != "Age_group"]
-  #  print ("hi 2")
-   # print (feat_cols)
+    # TODO might want to remove feat_cols correlated > 0.7?
+    print ("before")
+    print (df_day0_pivot.head())
+    df_day0_pivot = add_age_gender(df_day0_pivot, xls_file)
+    feat_cols.extend (['Age', 'Gender_numerical'])
+    print (feat_cols)
     pca_num_components = 8
     pca = PCA(n_components=pca_num_components)
    # autoscaler = StandardScaler()
-    df_day0_pivot = df_day0_pivot[feat_cols] # clean it up
+   # df_day0_pivot_all = df_day0_pivot
+#    df_day0_pivot = df_day0_pivot[feat_cols] # clean it up
     # scale to first day, use this same scaling for other days (#scaler)
-    scaler = StandardScaler().fit (df_day0_pivot)
+    scaler = StandardScaler().fit (df_day0_pivot[feat_cols])
 
     pca_result = run_PCA (df_day0_pivot, scaler, pca, feat_cols, pca_num_components, True)
+
+    loadings = pd.DataFrame (pca.components_.T, columns = ["PC{}".format (x) for x in range (1,pca_num_components+1)], \
+                             index = feat_cols)
+    plot_loadings  (pca_result[:,0:2], pca.components_.T, feat_cols, "loadings.png")
+   # print (loadings)
+    print ("Df day 0")
+    print (df_day0_pivot.columns)
+    print (df_day0_pivot.head())
     outfig = os.path.join (outdir, "PCA")
-    df_day0_pivot = add_age_gender(df_day0_pivot,xls_file)
+  #  df_day0_pivot = add_age_gender(df_day0_pivot,xls_file)
 
     print (df_day0_pivot.head())
     plot_PCA (df_day0_pivot, outfig)
